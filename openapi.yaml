@@ -1,0 +1,357 @@
+openapi: 3.1.0
+
+info:
+  title: URL Shortener API
+  version: 1.0.0
+  description: |
+    Сервіс скорочення посилань (лабораторна робота № 6).
+
+    Ресурс API — коротке посилання (`/api/links`). Перехід за коротким
+    посиланням (`/{code}`) і перевірка стану (`/health`) стоять поза
+    префіксом `/api`, документація Swagger UI доступна за шляхом `/docs`.
+
+    Усі помилки мають однакову структуру — схема `Error`. На метод, якого
+    немає в цій специфікації, сервер відповідає 405 із заголовком `Allow`.
+  license:
+    name: ISC
+    identifier: ISC
+
+servers:
+  - url: http://localhost:8080
+    description: Локальний запуск через docker compose
+
+security: []
+
+tags:
+  - name: links
+    description: Керування короткими посиланнями
+  - name: redirect
+    description: Перехід за коротким посиланням
+  - name: health
+    description: Перевірка стану сервера та бази даних
+
+paths:
+  /api/links:
+    post:
+      tags: [links]
+      operationId: createLink
+      summary: Створити коротке посилання
+      description: |
+        Створює коротке посилання для заданої адреси. Якщо `alias` не
+        передано, короткий код генерує сервер (7 символів `[A-Za-z0-9]`).
+        Кожен запит створює нове посилання, навіть якщо така адреса вже
+        скорочувалась.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateLinkRequest'
+            examples:
+              generated:
+                summary: Код генерує сервер
+                value:
+                  url: https://uk.wikipedia.org/wiki/Express.js
+              alias:
+                summary: Власний короткий код
+                value:
+                  url: https://expressjs.com/
+                  alias: express
+      responses:
+        '201':
+          description: Посилання створено
+          headers:
+            Location:
+              description: Адреса створеного ресурсу
+              schema:
+                type: string
+                example: /api/links/aB3xK9q
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Link'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '409':
+          $ref: '#/components/responses/AliasTaken'
+        default:
+          $ref: '#/components/responses/UnexpectedError'
+
+    get:
+      tags: [links]
+      operationId: listLinks
+      summary: Отримати перелік усіх посилань
+      description: Повертає всі посилання, від найновішого до найстарішого.
+      responses:
+        '200':
+          description: Перелік посилань (може бути порожнім)
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Link'
+        default:
+          $ref: '#/components/responses/UnexpectedError'
+
+  /api/links/{code}:
+    parameters:
+      - $ref: '#/components/parameters/Code'
+
+    get:
+      tags: [links]
+      operationId: getLink
+      summary: Отримати інформацію про посилання
+      responses:
+        '200':
+          description: Інформація про посилання
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Link'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/UnexpectedError'
+
+    patch:
+      tags: [links]
+      operationId: updateLink
+      summary: Змінити оригінальну адресу
+      description: |
+        Змінює лише оригінальну адресу. Короткий код, дата створення та
+        кількість переходів залишаються без змін.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateLinkRequest'
+      responses:
+        '200':
+          description: Посилання оновлено
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Link'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/UnexpectedError'
+
+    delete:
+      tags: [links]
+      operationId: deleteLink
+      summary: Видалити посилання
+      responses:
+        '204':
+          description: Посилання видалено, тіло відповіді порожнє
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/UnexpectedError'
+
+  /{code}:
+    parameters:
+      - $ref: '#/components/parameters/Code'
+
+    get:
+      tags: [redirect]
+      operationId: followLink
+      summary: Перейти за коротким посиланням
+      description: |
+        Перенаправляє на оригінальну адресу кодом 302 і збільшує лічильник
+        переходів на 1. Код 302 не кешується браузером, тому кожен перехід
+        доходить до сервера і підраховується.
+      responses:
+        '302':
+          description: Перенаправлення на оригінальну адресу
+          headers:
+            Location:
+              description: Оригінальна адреса
+              schema:
+                type: string
+                format: uri
+                example: https://uk.wikipedia.org/wiki/Express.js
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/UnexpectedError'
+
+  /health:
+    get:
+      tags: [health]
+      operationId: getHealth
+      summary: Перевірити стан сервера та підключення до бази
+      responses:
+        '200':
+          description: Сервер працює, база даних доступна
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Health'
+        '503':
+          description: Сервер працює, але база даних недоступна
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: DATABASE_UNAVAILABLE
+                message: Database is not available
+
+components:
+  parameters:
+    Code:
+      name: code
+      in: path
+      required: true
+      description: Короткий код посилання
+      schema:
+        type: string
+        pattern: '^[A-Za-z0-9_-]{3,32}$'
+        example: aB3xK9q
+
+  schemas:
+    Link:
+      type: object
+      required: [code, shortUrl, url, createdAt, clicks]
+      properties:
+        code:
+          type: string
+          description: Короткий код
+          example: aB3xK9q
+        shortUrl:
+          type: string
+          format: uri
+          description: Повна коротка адреса (формує сервер)
+          example: http://localhost:8080/aB3xK9q
+        url:
+          type: string
+          format: uri
+          description: Оригінальна адреса
+          example: https://uk.wikipedia.org/wiki/Express.js
+        createdAt:
+          type: string
+          format: date-time
+          description: Дата й час створення (формує сервер)
+          example: '2026-11-24T18:00:00.000Z'
+        clicks:
+          type: integer
+          minimum: 0
+          description: Кількість переходів (формує сервер)
+          example: 0
+
+    CreateLinkRequest:
+      type: object
+      required: [url]
+      additionalProperties: false
+      properties:
+        url:
+          $ref: '#/components/schemas/TargetUrl'
+        alias:
+          type: string
+          pattern: '^[A-Za-z0-9_-]{3,32}$'
+          description: |
+            Власний короткий код: 3–32 символи `A-Z a-z 0-9 _ -`.
+            Не може бути `api`, `docs` або `health` (без урахування регістру).
+          example: express
+
+    UpdateLinkRequest:
+      type: object
+      required: [url]
+      additionalProperties: false
+      properties:
+        url:
+          $ref: '#/components/schemas/TargetUrl'
+
+    TargetUrl:
+      type: string
+      format: uri
+      maxLength: 2048
+      description: Абсолютна адреса зі схемою http або https
+      example: https://uk.wikipedia.org/wiki/Express.js
+
+    Health:
+      type: object
+      required: [status, database]
+      properties:
+        status:
+          type: string
+          enum: [ok]
+        database:
+          type: string
+          enum: [up]
+
+    Error:
+      type: object
+      required: [error, message]
+      properties:
+        error:
+          type: string
+          description: Машинозчитуваний код помилки
+          enum:
+            - VALIDATION_ERROR
+            - INVALID_JSON
+            - ALIAS_TAKEN
+            - NOT_FOUND
+            - METHOD_NOT_ALLOWED
+            - DATABASE_UNAVAILABLE
+            - INTERNAL_ERROR
+        message:
+          type: string
+          description: Опис помилки для людини
+
+  responses:
+    BadRequest:
+      description: |
+        Некоректний запит: тіло не є JSON-об'єктом, JSON має синтаксичну
+        помилку, адреса некоректна, alias має неправильний формат або є
+        зарезервованим словом, передано зайві поля.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            invalidUrl:
+              summary: Передано не адресу
+              value:
+                error: VALIDATION_ERROR
+                message: "Field 'url' must be an absolute http or https URL"
+            invalidJson:
+              summary: Синтаксична помилка JSON
+              value:
+                error: INVALID_JSON
+                message: Request body is not valid JSON
+
+    AliasTaken:
+      description: Запропонований alias уже зайнятий іншим посиланням
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: ALIAS_TAKEN
+            message: "Alias 'express' is already taken"
+
+    NotFound:
+      description: Посилання з таким кодом не існує
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: NOT_FOUND
+            message: "Link 'aB3xK9q' not found"
+
+    UnexpectedError:
+      description: Непередбачена помилка сервера (наприклад, база даних недоступна)
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: INTERNAL_ERROR
+            message: Internal server error
