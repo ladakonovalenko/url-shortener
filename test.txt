@@ -1,0 +1,98 @@
+# Команди curl, згенеровані Swagger UI (http://localhost:8080/docs)
+# Формат: операція — код стану
+
+## GET /health — 200 OK
+curl -X 'GET' \
+  'http://localhost:8080/health' \
+  -H 'accept: */*'
+
+## GET /health — 503 Service Unavailable (після docker compose stop db)
+curl -X 'GET' \
+  'http://localhost:8080/health' \
+  -H 'accept: */*'
+
+## POST /api/links — 201 Created (код генерує сервер)
+curl -X 'POST' \
+  'http://localhost:8080/api/links' \
+  -H 'accept: */*' \
+  -H 'Content-Type: application/json' \
+  -d '{"url": "https://uk.wikipedia.org/wiki/Express.js"}'
+
+## POST /api/links — 201 Created (власний alias)
+curl -X 'POST' \
+  'http://localhost:8080/api/links' \
+  -H 'accept: */*' \
+  -H 'Content-Type: application/json' \
+  -d '{"url": "https://expressjs.com/", "alias": "express"}'
+
+## POST /api/links — 409 Conflict (alias уже зайнятий)
+curl -X 'POST' \
+  'http://localhost:8080/api/links' \
+  -H 'accept: */*' \
+  -H 'Content-Type: application/json' \
+  -d '{"url": "https://nodejs.org/", "alias": "express"}'
+
+## POST /api/links — 400 Bad Request (передано не адресу)
+curl -X 'POST' \
+  'http://localhost:8080/api/links' \
+  -H 'accept: */*' \
+  -H 'Content-Type: application/json' \
+  -d '{"url": "hello"}'
+
+## POST /api/links — 400 Bad Request (alias неправильного формату)
+curl -X 'POST' \
+  'http://localhost:8080/api/links' \
+  -H 'accept: */*' \
+  -H 'Content-Type: application/json' \
+  -d '{"url": "https://nodejs.org/", "alias": "a b"}'
+
+## POST /api/links — 400 Bad Request (зарезервований alias)
+curl -X 'POST' \
+  'http://localhost:8080/api/links' \
+  -H 'accept: */*' \
+  -H 'Content-Type: application/json' \
+  -d '{"url": "https://nodejs.org/", "alias": "docs"}'
+
+## POST /api/links — 400 Bad Request (поле, яке формує лише сервер)
+curl -X 'POST' \
+  'http://localhost:8080/api/links' \
+  -H 'accept: */*' \
+  -H 'Content-Type: application/json' \
+  -d '{"url": "https://nodejs.org/", "clicks": 100}'
+
+## POST /api/links — 400 Bad Request (синтаксична помилка JSON)
+curl -X 'POST' \
+  'http://localhost:8080/api/links' \
+  -H 'accept: */*' \
+  -H 'Content-Type: application/json' \
+  -d '{"url": }'
+
+## GET /api/links — 200 OK
+curl -X 'GET' \
+  'http://localhost:8080/api/links' \
+  -H 'accept: */*'
+
+## GET /api/links/{code} — 200 OK
+curl -X 'GET' \
+  'http://localhost:8080/api/links/express' \
+  -H 'accept: */*'
+
+## GET /api/links/{code} — 404 Not Found
+curl -X 'GET' \
+  'http://localhost:8080/api/links/nope123' \
+  -H 'accept: */*'
+
+## GET /{code} — 302 Found
+## (у Swagger UI — Failed to fetch, бо браузер іде за перенаправленням;
+##  код 302 і Location видно у виводі: curl -i http://localhost:8080/express)
+curl -X 'GET' \
+  'http://localhost:8080/express' \
+  -H 'accept: */*'
+
+## GET /{code} — 404 Not Found
+curl -X 'GET' \
+  'http://localhost:8080/nope123' \
+  -H 'accept: */*'
+
+## PATCH /api/links/{code} — 200 OK
+curl -X
